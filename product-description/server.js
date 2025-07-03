@@ -48,56 +48,61 @@ const AU_EXAMPLES = [
   "Slip into avant-garde minimalism with this asymmetrical tunic—sculptural draping and monochrome palette for fashion-forward flair."
 ];
 
-// Helper: truncate title to 4 core words, truncate description to 40 words
+// Helpers: truncate title and description
 function truncateTitle(text) {
   const stopWords = [
-  'black','white','navy','green','grey','beige','red','blue',
-  'pack','3-pack','2-pack','mens','kids','women',"women's"
-];
-  const words = text.split(/\s+/)
+    'black','white','navy','green','grey','beige','red','blue',
+    'pack','3-pack','2-pack','mens','kids','women',"women's"
+  ];
+  return text
+    .split(/\s+/)
     .filter(w => !stopWords.includes(w.toLowerCase()))
-    .slice(0, 4);
-  return words.join(' ');
+    .slice(0, 4)
+    .join(' ');
 }
 
 function truncateDescription(text) {
-  const words = text.split(/\s+/).slice(0, 40);
-  return words.join(' ');
+  return text
+    .split(/\s+/)
+    .slice(0, 15)
+    .join(' ');
 }
 
-// Build prompt (random 3 examples, image fallback)
+// Build prompt with rotating voices and dynamic bans
 function buildPrompt(title, imageUrl) {
   const examples = AU_EXAMPLES
     .sort(() => 0.5 - Math.random())
     .slice(0, 3)
     .map(x => `"${x}"`)
     .join("\n");
+  const banned = title
+    .split(/\s+/)
+    .map(w => w.toLowerCase())
+    .join(', ');
 
-    const instruction = `
-    You are a product copywriter for a premium UK fashion brand.
-    
-    Choose exactly one voice style at random:
-    1. Conversational (“You’ll love how…”)
-    2. Technical (“Engineered for…”)
-    3. Story (“From desk to dinner…”)
-    4. Minimalist (“Soft, sleek, ready.”)
-    5. Playful (“Get ready to…”)
-    
-    Rules:
-    – Title: up to 4 words (exclude colors/sizes).
-    – Description: around 20 words, never use any word from the title or these banned terms: cotton, stretch, comfort, boxer, brief.
-    – Start with one of: You’ll, Get, Meet, Step, Try.
-    
-    Rotating tone examples (pick any 3):
-    ${examples}
-    
-    Original Title: "${title}"`;
-    
+  const instruction = `
+You are a product copywriter for a premium UK fashion brand.
+
+Pick one voice at random:
+1. Conversational (“You’ll love…”)
+2. Technical (“Engineered for…”)
+3. Story (“From dawn to dusk…”)
+4. Minimalist (“Soft. Sleek. Ready.”)
+5. Playful (“Get ready…!”)
+
+Rules:
+– Title: up to 4 key words.
+– Description: ~15 words, avoid these: ${banned}
+– Open with one: You’ll, Get, Meet, Step, Try.
+
+Examples (pick any 3):
+${examples}
+
+Original Title: "${title}"`;
 
   if (!imageUrl) {
     return { role: 'user', content: instruction };
   }
-
   return {
     role: 'user',
     content: [
@@ -132,30 +137,24 @@ app.post('/generate-description', async (req, res) => {
       });
     }
 
-    const raw = response.choices[0].message.content.trim();
-    console.log(`\n[✓] GPT Output for "${title}":\n${raw}\n`);
-
+    const raw = response.choices[0].message.content.replace(/\*\*/g, '').trim();
     const safe = raw.replace(/[“”]/g, '"');
-    const titleMatch = safe.match(/title\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
-    const descMatch  = safe.match(/description\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
+
+    // Strip any leading "Title:" or numbering
+    const titleMatch = safe.match(/^(?:\d+\.\s*)?(?:Title[:\-]\s*)?(.+?)(?:\n|$)/im);
+    const descMatch  = safe.match(/(?:Description[:\-]\s*)(.+?)(?:\n|$)/i);
 
     let formattedTitle = titleMatch ? titleMatch[1].trim() : title;
-    let description    = descMatch  ? descMatch[1].trim() : raw;
+    let description    = descMatch ? descMatch[1].trim() : raw;
 
-    // Clean markdown bold
-    formattedTitle = formattedTitle.replace(/^\*\*|\*\*$/g, '').trim();
-    description    = description.replace(/^\*\*|\*\*$/g, '').trim();
-
-    // Truncate lengths
     formattedTitle = truncateTitle(formattedTitle);
     description    = truncateDescription(description);
 
     console.log('[→] Sending back to Sheets:', { formattedTitle, description });
-    return res.json({ formattedTitle, description });
-
+    res.json({ formattedTitle, description });
   } catch (err) {
-    console.error(`[✗] Overall failure:`, err);
-    return res.status(500).json({ error: 'Failed to generate output', detail: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Failed to generate output', detail: err.message });
   }
 });
 
