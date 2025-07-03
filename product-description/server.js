@@ -79,16 +79,20 @@ app.post('/generate-description', async (req, res) => {
     const formattedTitle = titleMatch ? titleMatch[1].trim() : '';
     const description = descMatch ? descMatch[1].trim() : '';
 
-    if (!formattedTitle || !description) {
-      console.warn('[!] Could not parse output, returning raw block');
-      return res.json({
-        formattedTitle: 'Unparsed Output',
-        description: raw
-      });
-    }
+    // Final cleaning: remove bold markers and excess whitespace
+formattedTitle = formattedTitle.replace(/^\*\*|\*\*$/g, '').trim();
+description = description.replace(/^\*\*|\*\*$/g, '').trim();
 
-    console.log('[→] Sending back to Sheets:', { formattedTitle, description });
-    res.json({ formattedTitle, description });
+if (!formattedTitle && !description) {
+  console.warn('[!] Blank row detected, skipping output');
+  return res.json({
+    formattedTitle: '',
+    description: ''
+  });
+}
+
+console.log('[→] Sending back to Sheets:', { formattedTitle, description });
+res.json({ formattedTitle, description });
 
   } catch (error) {
     console.error(`[✗] Failed to generate output:`, error);
