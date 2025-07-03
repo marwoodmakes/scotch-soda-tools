@@ -48,58 +48,57 @@ const AU_EXAMPLES = [
   "Slip into avant-garde minimalism with this asymmetrical tunic—sculptural draping and monochrome palette for fashion-forward flair."
 ];
 
+// Helper: remove stop-words (colors/sizes) and truncate to max words
+function truncateTitle(title) {
+  const stopWords = ['black','white','navy','green','grey','medium','blue','grey','beige','navy','green','red','pack','3-pack','2-pack','mens','kid','kids'];
+  const words = title.split(/\s+/)
+    .filter(w => !stopWords.includes(w.toLowerCase()))
+    .slice(0, 4);
+  return words.join(' ');
+}
+
+function truncateDescription(desc) {
+  const words = desc.split(/\s+/);
+  return words.slice(0, 40).join(' ');
+}
+
 // Prompt builder with image or text-only fallback
 function buildPrompt(title, imageUrl) {
-  // Shuffle and pick 3 random examples each call
   const examples = AU_EXAMPLES
     .sort(() => 0.5 - Math.random())
     .slice(0, 3)
     .map(x => `"${x}"`)
     .join("\n");
 
-  // Base instruction
-  const instruction = `You are a product copywriter for a premium UK fashion brand.
+  const instruction = `You are a product copywriter for a premium UK fashion brand.\n\n` +
+    `Your job is to rewrite the product title into a polished, professional, SEO-friendly retail title (max 4 words) ` +
+    `and write a short, stylish product description (max 40 words), matching the tone of these rotating examples:\n\n${examples}\n\n` +
+    `Use the following input:\nOriginal Title: "${title}"`;
 
-Your job is to:
-1. Rewrite the product title into a polished, professional, SEO-friendly retail title that’s clear and properly capitalised.
-2. Write a short, stylish product description (max 30 words), matching the tone of these rotating Australian examples:
-
-${examples}
-
-Use the following input:
-Original Title: "${title}"`;
-
-  // If no valid image, return text-only prompt
   if (!imageUrl) {
     return { role: 'user', content: instruction };
   }
 
-  // Otherwise include vision block
   return {
     role: 'user',
     content: [
-      { type: 'text', text: instruction + "\nImage:" },
+      { type: 'text', text: instruction + '\nImage:' },
       { type: 'image_url', image_url: { url: imageUrl } }
     ]
   };
 }
 
-// Main endpoint
 app.post('/generate-description', async (req, res) => {
   const { title, imageUrl } = req.body;
-  if (!title) {
-    return res.status(400).json({ error: 'Missing title' });
-  }
+  if (!title) return res.status(400).json({ error: 'Missing title' });
 
   try {
     let response;
-
-    // First, try vision-enabled; fallback to text-only on error
     try {
       response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [buildPrompt(title, imageUrl)],
-        max_tokens: 150,
+        max_tokens: 200,
         temperature: 0.7,
         top_p: 0.9
       });
@@ -108,7 +107,7 @@ app.post('/generate-description', async (req, res) => {
       response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [buildPrompt(title, null)],
-        max_tokens: 150,
+        max_tokens: 200,
         temperature: 0.7,
         top_p: 0.9
       });
@@ -117,21 +116,21 @@ app.post('/generate-description', async (req, res) => {
     const raw = response.choices[0].message.content.trim();
     console.log(`\n[✓] GPT Output for "${title}":\n${raw}\n`);
 
-    // Strip smart quotes
     const safe = raw.replace(/[“”]/g, '"');
-
-    // Flexible regex to capture title & description
     const titleMatch = safe.match(/(?:title|rewritten product title|retail title)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
     const descMatch  = safe.match(/(?:description|product description)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
 
     let formattedTitle = titleMatch ? titleMatch[1].trim() : '';
     let description    = descMatch  ? descMatch[1].trim() : '';
 
-    // Remove markdown bold
+    // Clean markdown bold
     formattedTitle = formattedTitle.replace(/^\*\*|\*\*$/g, '').trim();
     description    = description.replace(/^\*\*|\*\*$/g, '').trim();
 
-    // If still empty, return blanks
+    // Truncate and remove repeats
+    formattedTitle = truncateTitle(formattedTitle || title);
+    description    = truncateDescription(description || raw);
+
     if (!formattedTitle && !description) {
       console.warn('[!] Blank parse, returning empty');
       return res.json({ formattedTitle: '', description: '' });
