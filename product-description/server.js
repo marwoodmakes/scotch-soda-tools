@@ -16,7 +16,7 @@ app.use(bodyParser.json());
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 
-// AU tone training examples
+// AU tone training examples (30 diverse lines)
 const AU_EXAMPLES = [
  "Experience casual comfort and style with our Pitch Loose Fit Jeans – the perfect addition to your everyday wardrobe.",
  "This button-up shirt features a subtle dobby stripe for a touch of texture and a modern silhouette.",
@@ -53,87 +53,74 @@ const AU_EXAMPLES = [
 ];
 
 
-// Prompt builder with image fallback
-function buildPrompt(title, imageUrl) {
- // Pick 3 random AU examples each time
- const examples = AU_EXAMPLES
-   .sort(() => 0.5 - Math.random())     // shuffle
-   .slice(0, 3)                         // take first 3
-   .map(x => `"${x}"`)
-   .join("\n");
-
-
- if (!imageUrl) {
-   return {
-     role: 'user',
-     content: `You are a product copywriter for a premium UK fashion brand.
-
-
-Your job is to rewrite the product title into a polished, professional, SEO-friendly retail title and write a short (max 30 words) product description matching the tone of these rotating Australian examples:
-
-
-${examples}
-
-
-Use the following input:
-Original Title: "${title}"`
-   };
- }
-
-
- return {
-   role: 'user',
-   content: [
-     {
-       type: 'text',
-       text: `You are a product copywriter for a premium UK fashion brand.
-
-
-Your job is to:
-1. Rewrite the product title into a polished, professional, SEO-friendly retail title that’s clear and properly capitalised.
-2. Write a short, stylish product description (max 30 words), matching the tone of these rotating Australian examples:
-
-
-${examples}
-
-
-Use the following input:
-Original Title: "${title}"
-Image:`
-     },
-     { type: 'image_url', image_url: { url: imageUrl } }
-   ]
- };
+// Helpers: truncate title and description
+function truncateTitle(text) {
+ const stopWords = [
+   'black','white','navy','green','grey','beige','red','blue',
+   'pack','3-pack','2-pack','mens','kids','women',"women's"
+ ];
+ return text
+   .split(/\s+/)
+   .filter(w => !stopWords.includes(w.toLowerCase()))
+   .slice(0, 4)
+   .join(' ');
 }
 
 
+function truncateDescription(text) {
+ return text
+   .split(/\s+/)
+   .slice(0, 15)
+   .join(' ');
+}
 
 
- // Vision-enabled prompt
+// Build prompt with rotating voices and dynamic bans
+function buildPrompt(title, imageUrl) {
+ const examples = AU_EXAMPLES
+   .sort(() => 0.5 - Math.random())
+   .slice(0, 3)
+   .map(x => `"${x}"`)
+   .join("\n");
+ const banned = title
+   .split(/\s+/)
+   .map(w => w.toLowerCase())
+   .join(', ');
+
+
+ const instruction = `
+You are a product copywriter for a premium UK fashion brand.
+
+
+Pick one voice at random:
+1. Conversational (“You’ll love…”)
+2. Technical (“Engineered for…”)
+3. Story (“From dawn to dusk…”)
+4. Minimalist (“Soft. Sleek. Ready.”)
+5. Playful (“Get ready…!”)
+
+
+Rules:
+– Title: up to 4 key words.
+– Description: ~15 words, avoid these: ${banned}
+– Open with one: You’ll, Get, Meet, Step, Try.
+
+
+Examples (pick any 3):
+${examples}
+
+
+Original Title: "${title}"`;
+
+
+ if (!imageUrl) {
+   return { role: 'user', content: instruction };
+ }
  return {
    role: 'user',
    content: [
-     {
-       type: 'text',
-       text: `You are a product copywriter for a premium UK fashion brand.
-
-
-Your job is to:
-1. Rewrite the product title into a polished, professional, SEO-friendly retail title that’s clear and properly capitalised.
-2. Write a short, stylish product description (max 30 words), matching the tone of these Australian examples:
-
-
-${examplesText}
-
-
-Use the following input:
-Original Title: "${title}"
-Image:`
-     },
-     {
-       type: 'image_url',
-       image_url: { url: imageUrl }
-     }
+     { type: 'text', text: instruction + '\nImage:' },
+     { type: 'image_url', image_url: { url: imageUrl } }
    ]
  };
 }
@@ -141,69 +128,53 @@ Image:`
 
 app.post('/generate-description', async (req, res) => {
  const { title, imageUrl } = req.body;
- if (!title) {
-   return res.status(400).json({ error: 'Missing title' });
- }
+ if (!title) return res.status(400).json({ error: 'Missing title' });
 
 
  try {
    let response;
-   // Try vision; fallback to text-only if it fails
    try {
      response = await openai.chat.completions.create({
        model: 'gpt-4o',
        messages: [buildPrompt(title, imageUrl)],
-       max_tokens: 150,
-       temperature: 0.7,    // ← add this line
-       top_p: 0.9,          // ← optional, ensures diversity but keeps quality
+       max_tokens: 200,
+       temperature: 0.7,
+       top_p: 0.9
      });
-    
    } catch (_) {
-     console.warn(`[!] Vision failed for "${title}", retrying text-only`);
+     console.warn(`Vision failed for "${title}", retrying without image`);
      response = await openai.chat.completions.create({
        model: 'gpt-4o',
        messages: [buildPrompt(title, null)],
-       max_tokens: 150,
+       max_tokens: 200,
+       temperature: 0.7,
+       top_p: 0.9
      });
    }
 
 
-   const raw = response.choices[0].message.content.trim();
-   console.log(`\n[✓] GPT Output for "${title}":\n${raw}\n`);
+   const raw = response.choices[0].message.content.replace(/\*\*/g, '').trim();
+   const safe = raw.replace(/[“”]/g, '"');
 
 
-   // Strip smart quotes
-   const safeOutput = raw.replace(/[“”]/g, '"');
+   // Strip any leading "Title:" or numbering
+   const titleMatch = safe.match(/^(?:\d+\.\s*)?(?:Title[:\-]\s*)?(.+?)(?:\n|$)/im);
+   const descMatch  = safe.match(/(?:Description[:\-]\s*)(.+?)(?:\n|$)/i);
 
 
-   // Regex for title/description
-   const titleMatch = safeOutput.match(/(?:title|rewritten product title|retail title)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
-   const descMatch  = safeOutput.match(/(?:description|product description)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
+   let formattedTitle = titleMatch ? titleMatch[1].trim() : title;
+   let description    = descMatch ? descMatch[1].trim() : raw;
 
 
-   let formattedTitle = titleMatch ? titleMatch[1].trim() : '';
-   let description   = descMatch  ? descMatch[1].trim() : '';
-
-
-   // Remove markdown bold
-   formattedTitle = formattedTitle.replace(/^\*\*|\*\*$/g, '').trim();
-   description   = description.replace(/^\*\*|\*\*$/g, '').trim();
-
-
-   // Fallback blank
-   if (!formattedTitle && !description) {
-     console.warn('[!] Blank parse, returning empty');
-     return res.json({ formattedTitle: '', description: '' });
-   }
+   formattedTitle = truncateTitle(formattedTitle);
+   description    = truncateDescription(description);
 
 
    console.log('[→] Sending back to Sheets:', { formattedTitle, description });
-   return res.json({ formattedTitle, description });
-
-
- } catch (error) {
-   console.error(`[✗] Overall failure:`, error);
-   return res.status(500).json({ error: 'Failed to generate output', detail: error.message });
+   res.json({ formattedTitle, description });
+ } catch (err) {
+   console.error(err);
+   res.status(500).json({ error: 'Failed to generate output', detail: err.message });
  }
 });
 
@@ -211,6 +182,3 @@ app.post('/generate-description', async (req, res) => {
 app.listen(port, () => {
  console.log(`🚀 Server running on http://localhost:${port}`);
 });
-
-
-
