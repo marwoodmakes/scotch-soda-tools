@@ -64,31 +64,29 @@ app.post('/generate-description', async (req, res) => {
       messages: [buildPrompt(title, imageUrl)],
       max_tokens: 150,
     });
-
+  
     const raw = response.choices[0].message.content.trim();
     console.log(`\n[✓] GPT Output for: "${title}"\n${raw}\n`);
-
-    const titleMatch = raw.match(/title\W*\n*["“”]*(.+?)["“”]*\n/i);
+  
+    const titleMatch = raw.match(/(?:title|refined title)\W*\n*["“”]*(.+?)["“”]*\n/i);
     const descMatch = raw.match(/description\W*\n*["“”]*(.+?)["“”]*\n?/i);
-
+  
     const formattedTitle = titleMatch ? titleMatch[1].trim() : '';
     const description = descMatch ? descMatch[1].trim() : '';
-
-    if (!formattedTitle || !description || description.length < 5) {
-      console.warn('[!] Could not parse output, returning fallback');
-      return res.json({
-        formattedTitle: 'Unparsed Output',
-        description: raw
-      });
-    }
-
+  
     console.log('[→] Sending back to Sheets:', { formattedTitle, description });
-    return res.json({ formattedTitle, description });
-
+  
+    // Send clean output regardless
+    res.json({
+      formattedTitle: formattedTitle || 'Unparsed Output',
+      description: description || raw
+    });
+  
   } catch (error) {
     console.error(`[✗] Failed to generate output:`, error);
-    return res.status(500).json({ error: 'Failed to generate output', detail: error.message });
+    res.status(500).json({ error: 'Failed to generate output', detail: error.message });
   }
+  
 });
 
 app.listen(port, () => {
