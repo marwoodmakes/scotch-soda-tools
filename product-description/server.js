@@ -12,7 +12,7 @@ app.use(bodyParser.json());
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// AU tone training examples
+// AU tone training examples (30 diverse lines)
 const AU_EXAMPLES = [
   "Experience casual comfort and style with our Pitch Loose Fit Jeans – the perfect addition to your everyday wardrobe.",
   "This button-up shirt features a subtle dobby stripe for a touch of texture and a modern silhouette.",
@@ -48,35 +48,17 @@ const AU_EXAMPLES = [
   "Slip into avant-garde minimalism with this asymmetrical tunic—sculptural draping and monochrome palette for fashion-forward flair."
 ];
 
-// Prompt builder with image fallback
+// Prompt builder with image or text-only fallback
 function buildPrompt(title, imageUrl) {
-  // Pick 3 random AU examples each time
+  // Shuffle and pick 3 random examples each call
   const examples = AU_EXAMPLES
-    .sort(() => 0.5 - Math.random())     // shuffle
-    .slice(0, 3)                         // take first 3
+    .sort(() => 0.5 - Math.random())
+    .slice(0, 3)
     .map(x => `"${x}"`)
     .join("\n");
 
-  if (!imageUrl) {
-    return {
-      role: 'user',
-      content: `You are a product copywriter for a premium UK fashion brand.
-
-Your job is to rewrite the product title into a polished, professional, SEO-friendly retail title and write a short (max 30 words) product description matching the tone of these rotating Australian examples:
-
-${examples}
-
-Use the following input:
-Original Title: "${title}"`
-    };
-  }
-
-  return {
-    role: 'user',
-    content: [
-      {
-        type: 'text',
-        text: `You are a product copywriter for a premium UK fashion brand.
+  // Base instruction
+  const instruction = `You are a product copywriter for a premium UK fashion brand.
 
 Your job is to:
 1. Rewrite the product title into a polished, professional, SEO-friendly retail title that’s clear and properly capitalised.
@@ -85,41 +67,24 @@ Your job is to:
 ${examples}
 
 Use the following input:
-Original Title: "${title}"
-Image:`
-      },
+Original Title: "${title}"`;
+
+  // If no valid image, return text-only prompt
+  if (!imageUrl) {
+    return { role: 'user', content: instruction };
+  }
+
+  // Otherwise include vision block
+  return {
+    role: 'user',
+    content: [
+      { type: 'text', text: instruction + "\nImage:" },
       { type: 'image_url', image_url: { url: imageUrl } }
     ]
   };
 }
 
-
-  // Vision-enabled prompt
-  return {
-    role: 'user',
-    content: [
-      {
-        type: 'text',
-        text: `You are a product copywriter for a premium UK fashion brand.
-
-Your job is to:
-1. Rewrite the product title into a polished, professional, SEO-friendly retail title that’s clear and properly capitalised.
-2. Write a short, stylish product description (max 30 words), matching the tone of these Australian examples:
-
-${examplesText}
-
-Use the following input:
-Original Title: "${title}"
-Image:`
-      },
-      {
-        type: 'image_url',
-        image_url: { url: imageUrl }
-      }
-    ]
-  };
-}
-
+// Main endpoint
 app.post('/generate-description', async (req, res) => {
   const { title, imageUrl } = req.body;
   if (!title) {
@@ -128,22 +93,24 @@ app.post('/generate-description', async (req, res) => {
 
   try {
     let response;
-    // Try vision; fallback to text-only if it fails
+
+    // First, try vision-enabled; fallback to text-only on error
     try {
       response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [buildPrompt(title, imageUrl)],
         max_tokens: 150,
-        temperature: 0.7,    // ← add this line
-        top_p: 0.9,          // ← optional, ensures diversity but keeps quality
+        temperature: 0.7,
+        top_p: 0.9
       });
-      
     } catch (_) {
-      console.warn(`[!] Vision failed for "${title}", retrying text-only`);
+      console.warn(`Vision failed for "${title}", retrying text-only`);
       response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [buildPrompt(title, null)],
         max_tokens: 150,
+        temperature: 0.7,
+        top_p: 0.9
       });
     }
 
@@ -151,20 +118,20 @@ app.post('/generate-description', async (req, res) => {
     console.log(`\n[✓] GPT Output for "${title}":\n${raw}\n`);
 
     // Strip smart quotes
-    const safeOutput = raw.replace(/[“”]/g, '"');
+    const safe = raw.replace(/[“”]/g, '"');
 
-    // Regex for title/description
-    const titleMatch = safeOutput.match(/(?:title|rewritten product title|retail title)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
-    const descMatch  = safeOutput.match(/(?:description|product description)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
+    // Flexible regex to capture title & description
+    const titleMatch = safe.match(/(?:title|rewritten product title|retail title)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
+    const descMatch  = safe.match(/(?:description|product description)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
 
     let formattedTitle = titleMatch ? titleMatch[1].trim() : '';
-    let description   = descMatch  ? descMatch[1].trim() : '';
+    let description    = descMatch  ? descMatch[1].trim() : '';
 
     // Remove markdown bold
     formattedTitle = formattedTitle.replace(/^\*\*|\*\*$/g, '').trim();
-    description   = description.replace(/^\*\*|\*\*$/g, '').trim();
+    description    = description.replace(/^\*\*|\*\*$/g, '').trim();
 
-    // Fallback blank
+    // If still empty, return blanks
     if (!formattedTitle && !description) {
       console.warn('[!] Blank parse, returning empty');
       return res.json({ formattedTitle: '', description: '' });
@@ -173,9 +140,9 @@ app.post('/generate-description', async (req, res) => {
     console.log('[→] Sending back to Sheets:', { formattedTitle, description });
     return res.json({ formattedTitle, description });
 
-  } catch (error) {
-    console.error(`[✗] Overall failure:`, error);
-    return res.status(500).json({ error: 'Failed to generate output', detail: error.message });
+  } catch (err) {
+    console.error(`[✗] Overall failure:`, err);
+    return res.status(500).json({ error: 'Failed to generate output', detail: err.message });
   }
 });
 
