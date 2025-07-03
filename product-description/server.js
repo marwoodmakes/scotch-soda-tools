@@ -32,7 +32,7 @@ function buildPrompt(title, imageUrl) {
     content: [
       {
         type: 'text',
-        text:
+        text: 
 `You are a product copywriter for a premium UK fashion brand.
 
 Your job is to:
@@ -53,7 +53,6 @@ Image:`
   };
 }
 
-// Endpoint
 app.post('/generate-description', async (req, res) => {
   const { title, imageUrl } = req.body;
 
@@ -69,15 +68,16 @@ app.post('/generate-description', async (req, res) => {
     });
 
     const raw = response.choices[0].message.content.trim();
-    console.log(`\n[✓] GPT Output for: "${title}"\n${raw}\n`);
+    console.log(`\n[✓] GPT Output for "${title}":\n${raw}\n`);
 
-    const titleMatch = raw.match(/title\W*\n*["“”]*(.+?)["“”]*\n/i);
-    const descMatch = raw.match(/description\W*\n*["“”]*(.+?)["“”]*\n?/i);
+    // Strip smart quotes and use flexible regex
+    const safeOutput = raw.replace(/[“”]/g, '"');
+
+    const titleMatch = safeOutput.match(/title\s*:\s*["']?(.+?)["']?\s*(?:\n|$)/i);
+    const descMatch = safeOutput.match(/description\s*:\s*["']?(.+?)["']?\s*(?:\n|$)/i);
 
     const formattedTitle = titleMatch ? titleMatch[1].trim() : '';
     const description = descMatch ? descMatch[1].trim() : '';
-
-    console.log('[→] Sending back to Sheets:', { formattedTitle, description });
 
     if (!formattedTitle || !description) {
       console.warn('[!] Could not parse output, returning raw block');
@@ -87,15 +87,15 @@ app.post('/generate-description', async (req, res) => {
       });
     }
 
-    return res.json({ formattedTitle, description });
+    console.log('[→] Sending back to Sheets:', { formattedTitle, description });
+    res.json({ formattedTitle, description });
 
   } catch (error) {
     console.error(`[✗] Failed to generate output:`, error);
-    return res.status(500).json({ error: 'Failed to generate output', detail: error.message });
+    res.status(500).json({ error: 'Failed to generate output', detail: error.message });
   }
 });
 
-// Start server
 app.listen(port, () => {
   console.log(`🚀 Server running on http://localhost:${port}`);
 });
