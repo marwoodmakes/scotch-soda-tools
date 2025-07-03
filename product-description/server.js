@@ -62,7 +62,7 @@ app.post('/generate-description', async (req, res) => {
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4-vision-preview',
+      model: 'gpt-4o',
       messages: [buildPrompt(title, imageUrl)],
       max_tokens: 150,
     });
