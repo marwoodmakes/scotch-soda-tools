@@ -67,23 +67,22 @@ app.post('/generate-description', async (req, res) => {
       max_tokens: 150,
     });
 
-    const raw = response.choices[0].message.content.trim();
-    console.log(`\n[✓] GPT Output for: "${title}"\n${raw}\n`);
-
-    // Simple parsing: assume output is in "Title:\n...\nDescription:\n..." format
-    const lines = raw.split('\n');
-    let formattedTitle = '';
-    let description = '';
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line.toLowerCase().startsWith('title:')) {
-        formattedTitle = lines[i + 1]?.trim() || '';
-      }
-      if (line.toLowerCase().startsWith('description:')) {
-        description = lines[i + 1]?.trim() || '';
-      }
-    }
+       // More robust parsing: search lines for "title" and "description" using regex
+       const raw = response.choices[0].message.content.trim();
+       console.log(`\n[✓] GPT Output for: "${title}"\n${raw}\n`);
+   
+       const titleMatch = raw.match(/title\W*\n*["“”]*(.+?)["“”]*\n/i);
+       const descMatch = raw.match(/description\W*\n*["“”]*(.+?)["“”]*\n?/i);
+   
+       const formattedTitle = titleMatch ? titleMatch[1].trim() : '';
+       const description = descMatch ? descMatch[1].trim() : '';
+   
+       if (!formattedTitle || !description) {
+         return res.json({ formattedTitle: '', description: raw });
+       }
+   
+       res.json({ formattedTitle, description });
+   
 
     if (!formattedTitle || !description) {
       console.warn('[!] Could not parse output, returning raw block');
