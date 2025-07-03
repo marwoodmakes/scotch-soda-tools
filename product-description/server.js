@@ -73,15 +73,26 @@ function buildPrompt(title, imageUrl) {
     .map(x => `"${x}"`)
     .join("\n");
 
-  const instruction =
-`You are a product copywriter for a premium UK fashion brand.
-
-1. Rewrite the product title into a polished, professional, SEO-friendly retail title (max 4 words).
-2. Write a short, stylish product description (max 40 words), matching the tone of these rotating examples:
-
-${examples}
-
-Original Title: "${title}"`;
+    const instruction = `
+    You are a product copywriter for a premium UK fashion brand.
+    
+    Choose exactly one voice style at random:
+    1. Conversational (“You’ll love how…”)
+    2. Technical (“Engineered for…”)
+    3. Story (“From desk to dinner…”)
+    4. Minimalist (“Soft, sleek, ready.”)
+    5. Playful (“Get ready to…”)
+    
+    Rules:
+    – Title: up to 4 words (exclude colors/sizes).
+    – Description: around 20 words, never use any word from the title or these banned terms: cotton, stretch, comfort, boxer, brief.
+    – Start with one of: You’ll, Get, Meet, Step, Try.
+    
+    Rotating tone examples (pick any 3):
+    ${examples}
+    
+    Original Title: "${title}"`;
+    
 
   if (!imageUrl) {
     return { role: 'user', content: instruction };
