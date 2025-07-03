@@ -76,31 +76,28 @@ app.post('/generate-description', async (req, res) => {
     const titleMatch = safeOutput.match(/title\s*:\s*["']?(.+?)["']?\s*(?:\n|$)/i);
     const descMatch = safeOutput.match(/description\s*:\s*["']?(.+?)["']?\s*(?:\n|$)/i);
 
-    const formattedTitle = titleMatch ? titleMatch[1].trim() : '';
-    const description = descMatch ? descMatch[1].trim() : '';
+    let formattedTitle = titleMatch ? titleMatch[1].trim() : '';
+    let description = descMatch ? descMatch[1].trim() : '';
 
-    // Final cleaning: remove bold markers and excess whitespace
-formattedTitle = formattedTitle.replace(/^\*\*|\*\*$/g, '').trim();
-description = description.replace(/^\*\*|\*\*$/g, '').trim();
+    // Remove markdown bold markers
+    formattedTitle = formattedTitle.replace(/^\*\*|\*\*$/g, '').trim();
+    description = description.replace(/^\*\*|\*\*$/g, '').trim();
 
-if (!formattedTitle && !description) {
-  console.warn('[!] Blank row detected, skipping output');
-  return res.json({
-    formattedTitle: '',
-    description: ''
-  });
-}
+    // Skip blank rows
+    if (!formattedTitle && !description) {
+      console.warn('[!] Blank row detected, skipping output');
+      return res.json({ formattedTitle: '', description: '' });
+    }
 
-console.log('[→] Sending back to Sheets:', { formattedTitle, description });
-res.json({ formattedTitle, description });
+    console.log('[→] Sending back to Sheets:', { formattedTitle, description });
+    return res.json({ formattedTitle, description });
 
   } catch (error) {
     console.error(`[✗] Failed to generate output:`, error);
-    res.status(500).json({ error: 'Failed to generate output', detail: error.message });
+    return res.status(500).json({ error: 'Failed to generate output', detail: error.message });
   }
 });
 
 app.listen(port, () => {
   console.log(`🚀 Server running on http://localhost:${port}`);
 });
-
