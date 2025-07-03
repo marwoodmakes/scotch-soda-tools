@@ -50,7 +50,11 @@ const AU_EXAMPLES = [
 
 // Helper: truncate title to 4 core words, truncate description to 40 words
 function truncateTitle(text) {
-  const stopWords = ['black','white','navy','green','grey','beige','red','blue','pack','3-pack','2-pack','mens','kids','women','women's'];
+  const stopWords = [
+  'black','white','navy','green','grey','beige','red','blue',
+  'pack','3-pack','2-pack','mens','kids','women','women',
+  'women's'.replace(/'/g, ""), // handle apostrophe
+];
   const words = text.split(/\s+/)
     .filter(w => !stopWords.includes(w.toLowerCase()))
     .slice(0, 4);
