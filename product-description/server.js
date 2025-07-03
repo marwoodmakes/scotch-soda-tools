@@ -48,21 +48,21 @@ const AU_EXAMPLES = [
   "Slip into avant-garde minimalism with this asymmetrical tunic—sculptural draping and monochrome palette for fashion-forward flair."
 ];
 
-// Helper: remove stop-words (colors/sizes) and truncate to max words
-function truncateTitle(title) {
-  const stopWords = ['black','white','navy','green','grey','medium','blue','grey','beige','navy','green','red','pack','3-pack','2-pack','mens','kid','kids'];
-  const words = title.split(/\s+/)
+// Helper: truncate title to 4 core words, truncate description to 40 words
+function truncateTitle(text) {
+  const stopWords = ['black','white','navy','green','grey','beige','red','blue','pack','3-pack','2-pack','mens','kids','women','women's'];
+  const words = text.split(/\s+/)
     .filter(w => !stopWords.includes(w.toLowerCase()))
     .slice(0, 4);
   return words.join(' ');
 }
 
-function truncateDescription(desc) {
-  const words = desc.split(/\s+/);
-  return words.slice(0, 40).join(' ');
+function truncateDescription(text) {
+  const words = text.split(/\s+/).slice(0, 40);
+  return words.join(' ');
 }
 
-// Prompt builder with image or text-only fallback
+// Build prompt (random 3 examples, image fallback)
 function buildPrompt(title, imageUrl) {
   const examples = AU_EXAMPLES
     .sort(() => 0.5 - Math.random())
@@ -70,10 +70,15 @@ function buildPrompt(title, imageUrl) {
     .map(x => `"${x}"`)
     .join("\n");
 
-  const instruction = `You are a product copywriter for a premium UK fashion brand.\n\n` +
-    `Your job is to rewrite the product title into a polished, professional, SEO-friendly retail title (max 4 words) ` +
-    `and write a short, stylish product description (max 40 words), matching the tone of these rotating examples:\n\n${examples}\n\n` +
-    `Use the following input:\nOriginal Title: "${title}"`;
+  const instruction =
+`You are a product copywriter for a premium UK fashion brand.
+
+1. Rewrite the product title into a polished, professional, SEO-friendly retail title (max 4 words).
+2. Write a short, stylish product description (max 40 words), matching the tone of these rotating examples:
+
+${examples}
+
+Original Title: "${title}"`;
 
   if (!imageUrl) {
     return { role: 'user', content: instruction };
@@ -103,7 +108,7 @@ app.post('/generate-description', async (req, res) => {
         top_p: 0.9
       });
     } catch (_) {
-      console.warn(`Vision failed for "${title}", retrying text-only`);
+      console.warn(`Vision failed for "${title}", retrying without image`);
       response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [buildPrompt(title, null)],
@@ -117,24 +122,19 @@ app.post('/generate-description', async (req, res) => {
     console.log(`\n[✓] GPT Output for "${title}":\n${raw}\n`);
 
     const safe = raw.replace(/[“”]/g, '"');
-    const titleMatch = safe.match(/(?:title|rewritten product title|retail title)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
-    const descMatch  = safe.match(/(?:description|product description)\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
+    const titleMatch = safe.match(/title\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
+    const descMatch  = safe.match(/description\s*[:\-]\s*["']?(.+?)["']?\s*(?:\n|$)/i);
 
-    let formattedTitle = titleMatch ? titleMatch[1].trim() : '';
-    let description    = descMatch  ? descMatch[1].trim() : '';
+    let formattedTitle = titleMatch ? titleMatch[1].trim() : title;
+    let description    = descMatch  ? descMatch[1].trim() : raw;
 
     // Clean markdown bold
     formattedTitle = formattedTitle.replace(/^\*\*|\*\*$/g, '').trim();
     description    = description.replace(/^\*\*|\*\*$/g, '').trim();
 
-    // Truncate and remove repeats
-    formattedTitle = truncateTitle(formattedTitle || title);
-    description    = truncateDescription(description || raw);
-
-    if (!formattedTitle && !description) {
-      console.warn('[!] Blank parse, returning empty');
-      return res.json({ formattedTitle: '', description: '' });
-    }
+    // Truncate lengths
+    formattedTitle = truncateTitle(formattedTitle);
+    description    = truncateDescription(description);
 
     console.log('[→] Sending back to Sheets:', { formattedTitle, description });
     return res.json({ formattedTitle, description });
