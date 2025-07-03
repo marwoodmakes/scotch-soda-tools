@@ -74,15 +74,18 @@ function buildPrompt(title, imageUrl) {
     .map(x => `"${x}"`)
     .join("\n");
 
-  const instruction =
-`You are a product copywriter for a premium UK fashion brand.
-
-1. Rewrite the product title into a polished, professional, SEO-friendly retail title (max 4 words).
-2. Write a short, stylish product description (max 40 words), matching the tone of these rotating examples:
-
-${examples}
-
-Original Title: "${title}"`;
+    const instruction = 
+    `You are a product copywriter for a premium UK fashion brand.
+    
+    Guidelines:
+    – Title: up to 4 key words (ignore colors/sizes).
+    – Description: keep it punchy (around 20 words), avoid repeating title words.
+    
+    Tone examples:
+    ${examples}
+    
+    Original Title: "${title}"`;
+    
 
   if (!imageUrl) {
     return { role: 'user', content: instruction };
