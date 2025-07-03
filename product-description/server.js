@@ -86,10 +86,14 @@ app.post('/generate-description', async (req, res) => {
     }
 
     if (!formattedTitle || !description) {
-      // Fallback: just return full block if parsing fails
-      return res.json({ formattedTitle: '', description: raw });
+      console.warn('[!] Could not parse output, returning raw block');
+      return res.json({
+        formattedTitle: 'Unparsed Output',
+        description: raw
+      });
     }
 
+    console.log('[→] Sending back to Sheets:', { formattedTitle, description });
     res.json({ formattedTitle, description });
 
   } catch (error) {
@@ -101,3 +105,4 @@ app.post('/generate-description', async (req, res) => {
 app.listen(port, () => {
   console.log(`🚀 Server running on http://localhost:${port}`);
 });
+
