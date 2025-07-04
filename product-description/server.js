@@ -77,43 +77,71 @@ function extractSEOKeywords(title) {
   return seoKeywords;
 }
 
-// Generate cool, customer-friendly titles instead of technical ones
+// Generate cool, customer-friendly titles that stay connected to the original
 function generateCoolTitle(originalTitle, seoKeywords) {
-  const coolTitlePrefixes = [
-    'Essential', 'Classic', 'Signature', 'Modern', 'Urban', 'Weekend', 
-    'Everyday', 'Premium', 'Luxury', 'Comfort', 'Style', 'Perfect',
-    'Ultimate', 'Smart', 'Cool', 'Fresh', 'Bold', 'Sleek', 'Effortless'
-  ];
+  let title = originalTitle;
   
-  const coolTitleSuffixes = [
-    'Collection', 'Essentials', 'Series', 'Set', 'Edit', 'Selection',
-    'Trio', 'Duo', 'Pack', 'Bundle', 'Range', 'Line', 'Crew'
-  ];
+  // Clean up the title first
+  title = title.replace(/scotch\s*&\s*soda/gi, '').trim();
+  title = title.replace(/\s+/g, ' '); // Remove extra spaces
   
-  // Extract product type for more targeted naming
-  const productType = seoKeywords.find(keyword => 
-    ['jeans', 'blazer', 'shirt', 'boxers', 'socks', 'underwear', 'briefs'].includes(keyword)
-  );
+  const words = title.toLowerCase().split(/\s+/);
   
-  if (productType) {
-    const prefix = coolTitlePrefixes[Math.floor(Math.random() * coolTitlePrefixes.length)];
-    const suffix = coolTitleSuffixes[Math.floor(Math.random() * coolTitleSuffixes.length)];
-    
-    // Sometimes just prefix + product, sometimes prefix + suffix
-    return Math.random() > 0.5 
-      ? `${prefix} ${productType.charAt(0).toUpperCase() + productType.slice(1)}`
-      : `${prefix} ${suffix}`;
+  // Replace numbers with words
+  const numberReplacements = {
+    '2pk': 'Duo',
+    '3pk': 'Trio', 
+    '4pk': 'Quad',
+    '5pk': 'Five Pack',
+    '2': 'Duo',
+    '3': 'Trio',
+    '4': 'Quad',
+    '5': 'Five'
+  };
+  
+  // Apply number replacements
+  let processedTitle = title;
+  Object.keys(numberReplacements).forEach(num => {
+    const regex = new RegExp(num, 'gi');
+    processedTitle = processedTitle.replace(regex, numberReplacements[num]);
+  });
+  
+  // Remove common stop words but keep important descriptors
+  const stopWords = ['mens', 'men\\'s', 'quantity', 'mainline', 'fashion', 'underwear'];
+  const keepWords = ['cotton', 'modal', 'stretch', 'boxer', 'brief', 'knit', 'terry', 'dress', 'crew', 'blazer', 'jeans', 'slim', 'relaxed', 'regular', 'unconstructed', 'twill', 'ripstop', 'military', 'peak', 'lapel', 'single-buttoned', 'ralston', 'spring', 'lights', 'navy', 'green', 'blue', 'black', 'white', 'grey', 'beige', 'dark', 'light', 'medium'];
+  
+  // Split into words and filter
+  const titleWords = processedTitle.split(/\s+/).filter(word => {
+    const cleanWord = word.toLowerCase().replace(/[^a-z]/g, '');
+    return cleanWord.length > 0 && !stopWords.includes(cleanWord);
+  });
+  
+  // Keep important words and limit to 5
+  const finalWords = titleWords.slice(0, 5).map(word => {
+    // Capitalize first letter
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+  
+  // Join and clean up
+  let finalTitle = finalWords.join(' ');
+  
+  // Clean up any remaining issues
+  finalTitle = finalTitle.replace(/\s+/g, ' ').trim();
+  
+  // If title is too short or has issues, use fallback
+  if (finalTitle.split(' ').length < 2 || finalTitle.length < 5) {
+    return truncateTitle(originalTitle);
   }
   
-  // Fallback to original truncation
-  return truncateTitle(originalTitle);
+  return finalTitle;
 }
 
 function truncateTitle(text) {
   const stopWords = [
     'black', 'white', 'navy', 'green', 'grey', 'beige', 'red', 'blue', 
     'pack', '3-pack', '2-pack', 'mens', 'kids', 'women', "women's",
-    'quantity', 'scotch', 'soda', 'scotch&soda'
+    'quantity', 'scotch', 'soda', 'scotch&soda', 'mainline', 'fashion',
+    '2', '3', '4', '5', '6', '7', '8', '9', '0', '1', '2pk', '3pk', '4pk', '5pk'
   ];
   return text
     .split(/\s+/)
