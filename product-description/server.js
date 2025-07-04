@@ -81,54 +81,39 @@ function extractSEOKeywords(title) {
 function generateCoolTitle(originalTitle, seoKeywords) {
   let title = originalTitle;
   
-  // Clean up the title first
-  title = title.replace(/scotch\s*&\s*soda/gi, '').trim();
-  title = title.replace(/\s+/g, ' '); // Remove extra spaces
-  
-  const words = title.toLowerCase().split(/\s+/);
-  
-  // Replace numbers with words
-  const numberReplacements = {
-    '2pk': 'Duo',
-    '3pk': 'Trio', 
-    '4pk': 'Quad',
-    '5pk': 'Five Pack',
-    '2': 'Duo',
-    '3': 'Trio',
-    '4': 'Quad',
-    '5': 'Five'
-  };
-  
-  // Apply number replacements
-  let processedTitle = title;
-  Object.keys(numberReplacements).forEach(num => {
-    const regex = new RegExp(num, 'gi');
-    processedTitle = processedTitle.replace(regex, numberReplacements[num]);
+  // Remove problematic characters and terms
+  title = title.replace(/&/g, '');  // Remove &
+  title = title.replace(/scotch\s*soda/gi, '');  // Remove Scotch Soda
+  title = title.replace(/sp\d+/gi, '');  // Remove Sp25, Sp24, etc.
+  title = title.replace(/men['']?s/gi, '');  // Remove Men's, Men'S
+  title = title.replace(/\([^)]*\)/g, '');  // Remove anything in parentheses like (Black/Green)
+  title = title.replace(/\s*-\s*mainline\s*fashion/gi, '');  // Remove - Mainline Fashion
+  title = title.replace(/\s*-\s*[^-]*fashion[^-]*/gi, '');  // Remove other fashion descriptors
+  title = title.replace(/\d+pk/gi, (match) => {
+    // Replace number packs with words
+    const num = match.replace(/pk/gi, '');
+    const replacements = { '2': 'Duo', '3': 'Trio', '4': 'Quad', '5': 'Five' };
+    return replacements[num] || match;
   });
   
-  // Remove common stop words but keep important descriptors
-  const stopWords = ['mens', 'men\\'s', 'quantity', 'mainline', 'fashion', 'underwear'];
-  const keepWords = ['cotton', 'modal', 'stretch', 'boxer', 'brief', 'knit', 'terry', 'dress', 'crew', 'blazer', 'jeans', 'slim', 'relaxed', 'regular', 'unconstructed', 'twill', 'ripstop', 'military', 'peak', 'lapel', 'single-buttoned', 'ralston', 'spring', 'lights', 'navy', 'green', 'blue', 'black', 'white', 'grey', 'beige', 'dark', 'light', 'medium'];
+  // Clean up extra spaces
+  title = title.replace(/\s+/g, ' ').trim();
   
-  // Split into words and filter
-  const titleWords = processedTitle.split(/\s+/).filter(word => {
+  // Remove common stop words but keep descriptive words
+  const stopWords = ['quantity', 'mainline', 'fashion', 'underwear'];
+  const words = title.split(/\s+/).filter(word => {
     const cleanWord = word.toLowerCase().replace(/[^a-z]/g, '');
-    return cleanWord.length > 0 && !stopWords.includes(cleanWord);
+    return cleanWord.length > 1 && !stopWords.includes(cleanWord);
   });
   
-  // Keep important words and limit to 5
-  const finalWords = titleWords.slice(0, 5).map(word => {
-    // Capitalize first letter
+  // Take first 5 meaningful words and capitalize properly
+  const finalWords = words.slice(0, 5).map(word => {
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   });
   
-  // Join and clean up
   let finalTitle = finalWords.join(' ');
   
-  // Clean up any remaining issues
-  finalTitle = finalTitle.replace(/\s+/g, ' ').trim();
-  
-  // If title is too short or has issues, use fallback
+  // If we end up with something too short or weird, use fallback
   if (finalTitle.split(' ').length < 2 || finalTitle.length < 5) {
     return truncateTitle(originalTitle);
   }
