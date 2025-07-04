@@ -77,7 +77,37 @@ function extractSEOKeywords(title) {
   return seoKeywords;
 }
 
-// Removed banned phrases - let's be more dynamic instead!
+// Generate cool, customer-friendly titles instead of technical ones
+function generateCoolTitle(originalTitle, seoKeywords) {
+  const coolTitlePrefixes = [
+    'Essential', 'Classic', 'Signature', 'Modern', 'Urban', 'Weekend', 
+    'Everyday', 'Premium', 'Luxury', 'Comfort', 'Style', 'Perfect',
+    'Ultimate', 'Smart', 'Cool', 'Fresh', 'Bold', 'Sleek', 'Effortless'
+  ];
+  
+  const coolTitleSuffixes = [
+    'Collection', 'Essentials', 'Series', 'Set', 'Edit', 'Selection',
+    'Trio', 'Duo', 'Pack', 'Bundle', 'Range', 'Line', 'Crew'
+  ];
+  
+  // Extract product type for more targeted naming
+  const productType = seoKeywords.find(keyword => 
+    ['jeans', 'blazer', 'shirt', 'boxers', 'socks', 'underwear', 'briefs'].includes(keyword)
+  );
+  
+  if (productType) {
+    const prefix = coolTitlePrefixes[Math.floor(Math.random() * coolTitlePrefixes.length)];
+    const suffix = coolTitleSuffixes[Math.floor(Math.random() * coolTitleSuffixes.length)];
+    
+    // Sometimes just prefix + product, sometimes prefix + suffix
+    return Math.random() > 0.5 
+      ? `${prefix} ${productType.charAt(0).toUpperCase() + productType.slice(1)}`
+      : `${prefix} ${suffix}`;
+  }
+  
+  // Fallback to original truncation
+  return truncateTitle(originalTitle);
+}
 
 function truncateTitle(text) {
   const stopWords = [
@@ -100,27 +130,55 @@ function truncateDescription(text) {
   return text;
 }
 
-// Dynamic prompt with random AU example and more freedom
+// Super dynamic prompt with multiple randomization layers
 function buildPrompt(title, imageUrl) {
-  // Pick ONE random AU example as inspiration
-  const randomExample = AU_EXAMPLES[Math.floor(Math.random() * AU_EXAMPLES.length)];
+  // Shuffle and pick multiple random examples for more variety
+  const shuffledExamples = AU_EXAMPLES.sort(() => 0.5 - Math.random());
+  const randomExamples = shuffledExamples.slice(0, Math.floor(Math.random() * 3) + 2); // 2-4 examples
+  
   const seoKeywords = extractSEOKeywords(title);
   
-  const instruction = `You are a product copywriter for a premium UK fashion brand.
+  // Random instruction approaches
+  const approaches = [
+    "Write a product description that feels fresh and unique. Focus on the experience of wearing this item.",
+    "Create a compelling description that makes someone want to buy this. What makes it special?",
+    "Describe this product like you're recommending it to a friend. What would you say?",
+    "Write a description that captures the lifestyle and feeling this product represents.",
+    "Focus on the benefits and what this product does for the wearer, not just features."
+  ];
+  
+  const randomApproach = approaches[Math.floor(Math.random() * approaches.length)];
+  
+  // Random style directions
+  const styleDirections = [
+    "Use vivid, descriptive language that paints a picture.",
+    "Keep it conversational and approachable.",
+    "Be confident and bold in your language.",
+    "Focus on emotions and feelings the product evokes.",
+    "Mix technical details with lifestyle benefits."
+  ];
+  
+  const randomStyle = styleDirections[Math.floor(Math.random() * styleDirections.length)];
+  
+  const instruction = `You are a creative product copywriter for a premium UK fashion brand.
 
-Write a product description inspired by this AU brand voice example:
-"${randomExample}"
+${randomApproach} ${randomStyle}
 
-REQUIREMENTS:
-- Write ONLY the description (no title, no prefixes)
-- Include these SEO keywords naturally: ${seoKeywords.join(', ')}
-- 20-40 words for rich detail
-- Be creative and varied - avoid repetitive openings
-- Focus on materials, fit, styling, or unique features
+Include these keywords naturally: ${seoKeywords.join(', ')}
 
-Use your own creative voice - don't copy the example, just match the tone and style.
+Write 20-40 words that are completely unique and avoid these overused starts:
+- "Crafted from" / "Crafted with"
+- "Elevate your" / "Elevate"  
+- "Discover" / "Experience"
+- "Indulge in"
+- "Embrace"
 
-Original Title: "${title}"`;
+Get inspiration from these brand voice examples (but don't copy them):
+${randomExamples.map(ex => `"${ex}"`).join('\n')}
+
+Original Product: "${title}"
+
+Write ONLY the product description - no title, no prefixes.`;
 
   if (!imageUrl) {
     return { role: 'user', content: instruction };
@@ -207,14 +265,14 @@ app.post('/generate-description', async (req, res) => {
 
     const rawContent = response.choices[0].message.content;
     const description = parseResponse(rawContent, title);
-    const formattedTitle = truncateTitle(title);
     const seoKeywords = extractSEOKeywords(title);
+    const formattedTitle = generateCoolTitle(title, seoKeywords);
 
     console.log('[→] Original:', title);
     console.log('[→] Using Image:', usingImage);
     console.log('[→] SEO Keywords:', seoKeywords.join(', '));
+    console.log('[→] Cool Title:', formattedTitle);
     console.log('[→] Raw AI Response:', rawContent);
-    console.log('[→] Formatted Title:', formattedTitle);
     console.log('[→] Final Description:', description);
     console.log('---');
 
@@ -223,8 +281,9 @@ app.post('/generate-description', async (req, res) => {
     console.error('Generation failed:', err);
     
     // Fallback: return a simple description based on title
-    const fallbackDescription = `Experience quality and style with this ${extractSEOKeywords(title).join(' ')} – designed for everyday wear and lasting comfort.`;
-    const formattedTitle = truncateTitle(title);
+    const seoKeywords = extractSEOKeywords(title);
+    const fallbackDescription = `Experience quality and style with this ${seoKeywords.join(' ')} – designed for everyday wear and lasting comfort.`;
+    const formattedTitle = generateCoolTitle(title, seoKeywords);
     
     console.log('[→] FALLBACK for:', title);
     console.log('[→] Fallback Description:', fallbackDescription);
