@@ -12,7 +12,7 @@ app.use(bodyParser.json());
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// AU tone training examples (30 diverse lines)
+// AU tone training examples (expanded with natural variations)
 const AU_EXAMPLES = [
   "Experience casual comfort and style with our Pitch Loose Fit Jeans – the perfect addition to your everyday wardrobe.",
   "This button-up shirt features a subtle dobby stripe for a touch of texture and a modern silhouette.",
@@ -23,7 +23,27 @@ const AU_EXAMPLES = [
   "Elevate your look with this double-breasted wool blazer—tailored fit meets timeless sophistication in a versatile charcoal hue.",
   "Slip into comfort with our ultra-soft modal lounge tee—relaxed silhouette and scoop neckline make it a go-to for casual weekends.",
   "Layer up in style with this chunky cable-knit cardigan—cozy collar detail and patch pockets combine warmth with modern flair.",
-  "Make a statement in this satin wrap dress—draped waist and asymmetrical hem exude elegance from desk to dinner."
+  "Make a statement in this satin wrap dress—draped waist and asymmetrical hem exude elegance from desk to dinner.",
+  "This adjustable cap allows for a customizable fit ensuring maximum comfort and practicality. Its versatile design makes it the perfect accessory for any outdoor activity or casual outing.",
+  "Embrace effortless style with this raw edge relaxed fit t-shirt. Its scoop neck and short sleeves make it a versatile classic fit piece perfect for everyday wear.",
+  "Experience casual comfort and style with our Pitch loose fit jeans. Sitting low on the waist these jeans are designed for a relaxed and easy-going look.",
+  "Step out in style with this classic quilted jacket. The collared button-up design is complemented by a unique geometric quilting and front pockets for utility.",
+  "Flow through your day in this sheer v-neck maxi dress featuring dramatic sleeves and a captivating floral pattern. It's graceful and effortlessly stylish.",
+  "This jewel neckline pullover combines texture with a stretchy fit for a look that's as comfortable as it is classic.",
+  "Dive into Amsterdam's essence with this sleek bandana featuring a city-inspired minimal print. Ideal for an urban chic look.",
+  "Channel retro vibes with a modern twist in the Charm flared jeans. The high-quality cotton blend ensures comfort and flexibility making them a perfect pick for weekend family road trips.",
+  "Make a statement from day to night in our denim wide leg jumpsuit. Designed with a balance of cotton Lyocell for ultimate versatility.",
+  "Twirl into elegance with this tulle layered skirt. Featuring layers of soft tulle this skirt adds a whimsical and dreamy touch to any outfit.",
+  "Capture the laidback essence of Amsterdam with this oversized shirt. Featuring a minimalist city print it's effortlessly stylish and pairs well with anything.",
+  "This jogger redefines relaxed luxury with a wide leg and easy drawstring waist promising ultimate comfort and ease.",
+  "Embrace the essence of outdoor tranquility with this park print shirt. Its button-up design and short sleeves offer effortless style.",
+  "Versatility is at the forefront with this classic vintage bomber jacket that's reversible offering two distinct looks in one piece.",
+  "From morning meetings to evening outings these lightly stonewashed pieces transition seamlessly through your day.",
+  "Refresh your wardrobe with our girlfriend poplin shirt. This piece features a relaxed girlfriend fit and is made from crisp poplin offering a polished look.",
+  "This breathable ribbed knit pullover with subtle bell sleeves offers a stylish yet comfortable option for pairing or standalone wear.",
+  "Add a touch of elegance to your wardrobe with this stylish printed mock neck long sleeved top. Perfect for any season this top combines comfort with chic design.",
+  "Embrace cosy chic with this v-neck sweatshirt featuring drop shoulder sleeves and rib knit finishing. Its relaxed fit ensures comfort.",
+  "Complete your ultimate wardrobe with our corduroy skirt where classic meets standout style. This piece redefines everyday versatility."
 ];
 
 // Improved helpers: extract key product attributes instead of just truncating
@@ -60,7 +80,11 @@ function extractSEOKeywords(title) {
 // Removed banned phrases - let's be more dynamic instead!
 
 function truncateTitle(text) {
-  const stopWords = ['black', 'white', 'navy', 'green', 'grey', 'beige', 'red', 'blue', 'pack', '3-pack', '2-pack', 'mens', 'kids', 'women', "women's"];
+  const stopWords = [
+    'black', 'white', 'navy', 'green', 'grey', 'beige', 'red', 'blue', 
+    'pack', '3-pack', '2-pack', 'mens', 'kids', 'women', "women's",
+    'quantity', 'scotch', 'soda', 'scotch&soda'
+  ];
   return text
     .split(/\s+/)
     .filter(w => !stopWords.includes(w.toLowerCase()))
