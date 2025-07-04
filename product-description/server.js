@@ -57,14 +57,7 @@ function extractSEOKeywords(title) {
   return seoKeywords;
 }
 
-function createBannedPhrases() {
-  // Ban overused phrases instead of individual words
-  return [
-    'ultimate comfort', 'unparalleled comfort', 'all-day ease', 'all-day comfort',
-    'step into', 'meet ultimate', 'get ready for', 'crafted for', 'designed for',
-    'perfect blend', 'seamless fit', 'modern fit', 'stylish design', 'premium quality'
-  ];
-}
+// Removed banned phrases - let's be more dynamic instead!
 
 function truncateTitle(text) {
   const stopWords = ['black', 'white', 'navy', 'green', 'grey', 'beige', 'red', 'blue', 'pack', '3-pack', '2-pack', 'mens', 'kids', 'women', "women's"];
@@ -76,46 +69,32 @@ function truncateTitle(text) {
 }
 
 function truncateDescription(text) {
-  return text
-    .split(/\s+/)
-    .slice(0, 15)
-    .join(' ');
+  const words = text.split(/\s+/);
+  if (words.length > 40) {
+    return words.slice(0, 40).join(' ') + '...';
+  }
+  return text;
 }
 
-// Improved prompt with clearer instructions and better structure
+// Dynamic prompt with random AU example and more freedom
 function buildPrompt(title, imageUrl) {
-  const examples = AU_EXAMPLES
-    .sort(() => 0.5 - Math.random())
-    .slice(0, 3)
-    .map(x => `"${x}"`)
-    .join("\n");
-  
+  // Pick ONE random AU example as inspiration
+  const randomExample = AU_EXAMPLES[Math.floor(Math.random() * AU_EXAMPLES.length)];
   const seoKeywords = extractSEOKeywords(title);
-  const bannedPhrases = createBannedPhrases();
   
   const instruction = `You are a product copywriter for a premium UK fashion brand.
 
-CRITICAL RULES:
-- Write ONLY a product description (no title, no prefixes)
+Write a product description inspired by this AU brand voice example:
+"${randomExample}"
+
+REQUIREMENTS:
+- Write ONLY the description (no title, no prefixes)
 - Include these SEO keywords naturally: ${seoKeywords.join(', ')}
-- AVOID these overused phrases: ${bannedPhrases.join(', ')}
-- Be specific and varied - no generic comfort language
-- Keep it concise: ~12-15 words maximum
-- Focus on unique benefits, materials, or styling details
+- 20-40 words for rich detail
+- Be creative and varied - avoid repetitive openings
+- Focus on materials, fit, styling, or unique features
 
-VOICE OPTIONS (pick one randomly):
-1. Conversational: "You'll love..."
-2. Technical: "Engineered with..."
-3. Story: "From desk to dinner..."
-4. Minimalist: "Soft. Sleek. Ready."
-5. Playful: "Turn heads with..."
-
-STYLE EXAMPLES:
-${examples}
-
-TASK:
-Write a fresh, specific description that includes the SEO keywords but avoids clichés.
-Focus on what makes this product unique or special.
+Use your own creative voice - don't copy the example, just match the tone and style.
 
 Original Title: "${title}"`;
 
@@ -172,20 +151,31 @@ app.post('/generate-description', async (req, res) => {
 
   try {
     let response;
-    try {
-      response = await openai.chat.completions.create({
-        model: 'gpt-4o',
-        messages: [buildPrompt(title, imageUrl)],
-        max_tokens: 100, // Reduced to force conciseness
-        temperature: 0.8, // Slightly higher for more creativity
-        top_p: 0.9
-      });
-    } catch (_) {
-      console.warn(`Vision failed for "${title}", retrying without image`);
+    let usingImage = false;
+    
+    // First try with image if URL provided
+    if (imageUrl && imageUrl.trim() !== '') {
+      try {
+        usingImage = true;
+        response = await openai.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [buildPrompt(title, imageUrl)],
+          max_tokens: 200,
+          temperature: 0.8,
+          top_p: 0.9
+        });
+      } catch (imageError) {
+        console.warn(`Vision failed for "${title}": ${imageError.message}`);
+        usingImage = false;
+      }
+    }
+    
+    // If no image or image failed, generate from title only
+    if (!usingImage) {
       response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [buildPrompt(title, null)],
-        max_tokens: 100,
+        max_tokens: 200,
         temperature: 0.8,
         top_p: 0.9
       });
@@ -197,6 +187,7 @@ app.post('/generate-description', async (req, res) => {
     const seoKeywords = extractSEOKeywords(title);
 
     console.log('[→] Original:', title);
+    console.log('[→] Using Image:', usingImage);
     console.log('[→] SEO Keywords:', seoKeywords.join(', '));
     console.log('[→] Raw AI Response:', rawContent);
     console.log('[→] Formatted Title:', formattedTitle);
@@ -205,8 +196,20 @@ app.post('/generate-description', async (req, res) => {
 
     res.json({ formattedTitle, description });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to generate output', detail: err.message });
+    console.error('Generation failed:', err);
+    
+    // Fallback: return a simple description based on title
+    const fallbackDescription = `Experience quality and style with this ${extractSEOKeywords(title).join(' ')} – designed for everyday wear and lasting comfort.`;
+    const formattedTitle = truncateTitle(title);
+    
+    console.log('[→] FALLBACK for:', title);
+    console.log('[→] Fallback Description:', fallbackDescription);
+    
+    res.json({ 
+      formattedTitle, 
+      description: fallbackDescription,
+      note: 'Generated with fallback due to API error'
+    });
   }
 });
 
